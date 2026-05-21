@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ship-logger-v1';
+const CACHE_NAME = 'ship-logger-v2';
 const FILES_TO_CACHE = [
   './',
   './index.html',
