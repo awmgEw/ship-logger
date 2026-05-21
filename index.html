@@ -2259,11 +2259,9 @@
 
         window.onload = init;
         if ("serviceWorker" in navigator) {
-            const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
-            const manifestPath = basePath + '/manifest.json';
-            const manifestLink = document.querySelector('link[rel="manifest"]');
-            if (manifestLink) manifestLink.setAttribute('href', manifestPath);
-            navigator.serviceWorker.register(basePath + '/sw.js');
+            navigator.serviceWorker.register("/ship-logger/sw.js")
+                .then(reg => console.log("SW registered:", reg))
+                .catch(err => console.log("SW registration failed:", err));
         }
     </script>
 </body>
