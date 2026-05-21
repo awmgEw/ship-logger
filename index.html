@@ -1,0 +1,2269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Судовой Журнал Замеров</title>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#1e2530">
+    <meta name="mobile-web-app-capable" content="yes">
+    <style>
+        :root {
+            --bg-color: #121824;
+            --card-bg: #1e2530;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border-color: #374151;
+            --phantom-color: #60a5fa;
+            --danger: #ef4444;
+            --edit-color: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding-bottom: 20px;
+            user-select: none;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .date-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="date"] {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .date-nav-btn {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .date-nav-btn:active {
+            background: var(--card-bg);
+        }
+
+        /* Навигация */
+        .tabs {
+            display: flex;
+            background: var(--bg-color);
+            padding: 2px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .tab-btn.active {
+            background: var(--card-bg);
+            color: var(--text-main);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* Контент */
+        .container {
+            padding: 16px;
+        }
+
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        /* Карточки замеров с поддержкой Drag and Drop */
+        #logs-container {
+            position: relative;
+        }
+
+        .log-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .drag-placeholder {
+            background: rgba(59, 130, 246, 0.08);
+            border: 2px dashed var(--accent);
+            border-radius: 10px;
+            min-height: 80px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .dragging {
+            opacity: 0.9;
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+
+        .card-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Кнопка перетаскивания */
+        .drag-handle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            cursor: grab;
+            padding: 4px 8px;
+            touch-action: none; /* Критично для мобильных (отключает нативный скролл при удержании) */
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+            color: var(--accent);
+        }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 1rem;
+            user-select: text;
+        }
+
+        .card-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-inputs {
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .input-group label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .card-inputs input[type="number"] {
+            /* Использует общие стили для input[type="number"] */
+        }
+
+        /* Стили предсказания */
+        .prediction-zone {
+            margin-top: 8px;
+            background: rgba(59, 130, 246, 0.07);
+            border: 1px dashed rgba(59, 130, 246, 0.25);
+            border-radius: 6px;
+            padding: 6px 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+        }
+
+        .phantom-val {
+            color: var(--phantom-color);
+            font-weight: bold;
+        }
+
+        /* Стили для чекбокса "Операция" */
+        .input-with-operation {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .operation-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 0 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            transition: all 0.2s;
+            user-select: none;
+            height: 20px; /* было 42px — теперь вдвое меньше */
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .operation-toggle.active {
+            background: rgba(245, 158, 11, 0.25);
+            border-color: #f59e0b;
+            color: #f59e0b;
+        }
+
+        .side-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .es-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-weight: 700;
+            height: 20px;
+            padding: 0 10px;
+            white-space: nowrap;
+            transition: all 0.2s;
+            user-select: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .es-btn:active { background: rgba(239,68,68,0.15); border-color: var(--danger); color: var(--danger); }
+        .es-btn.has-entries { background: rgba(239,68,68,0.1); border-color: var(--danger); color: var(--danger); }
+
+        .operation-toggle input {
+            display: none; /* Прячем нативный чекбокс, стилизуем всю обертку */
+        }
+
+        .op-label {
+            font-weight: 600;
+        }
+
+        .corrected-val {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(96, 165, 250, 0.05); /* Легкий оттенок phantom-color */
+            border: 1px dashed rgba(96, 165, 250, 0.3);
+            color: var(--phantom-color);
+            padding: 0 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            height: 42px;
+            min-width: 60px;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        /* Экран настроек */
+        .form-group {
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 1rem;
+            user-select: text;
+            height: 42px;
+            box-sizing: border-box;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 16px;
+            margin: 6px 0;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .checkbox-label input {
+            width: 18px;
+            height: 18px;
+        }
+
+        button.btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button.btn:active {
+            background: var(--accent-hover);
+        }
+
+        /* Стили аккордеона БД */
+        .accordion-wrapper {
+            margin-top: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            background: var(--card-bg);
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .accordion-header:active {
+            background: #252d3a;
+        }
+
+        .accordion-arrow {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+
+        .accordion-content {
+            background: rgba(30, 37, 48, 0.4);
+            padding: 10px;
+            display: none;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .accordion-content.open {
+            display: block;
+        }
+
+        /* Список приборов */
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-action {
+            background: transparent;
+            border: none;
+            padding: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .btn-action.edit {
+            color: var(--edit-color);
+        }
+
+        .btn-action.delete {
+            color: var(--danger);
+        }
+
+        .btn-action:active {
+            background: rgba(255,255,255,0.05);
+        }
+
+        /* Панель бэкапа */
+        .backup-zone {
+            margin-top: 24px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+        }
+
+        .backup-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .btn-secondary {
+            background: #374151;
+            flex: 1;
+        }
+
+        .btn-secondary:active {
+            background: #4b5563;
+        }
+
+        .file-input-label {
+            background: #374151;
+            color: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-align: center;
+            flex: 1;
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        .file-input-label:active {
+            background: #4b5563;
+        }
+
+        #file-import {
+            display: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 30px 10px;
+            font-size: 0.9rem;
+        }
+
+        /* Модальное окно редактирования */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 16px;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 450px;
+            margin-bottom: 0; /* Сброс маржина карточки */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        /* Группы и кастомный дропдаун */
+        .group-select-field {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .group-select-field:active {
+            border-color: var(--accent);
+        }
+
+        .group-select-arrow {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .group-dropdown-wrapper {
+            position: relative;
+        }
+
+        .group-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            z-index: 50;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            overflow: hidden;
+            max-height: 260px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .group-dropdown-list {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .group-dropdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.95rem;
+        }
+
+        .group-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .group-dropdown-item:active {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .group-dropdown-item.selected {
+            color: var(--accent);
+        }
+
+        .group-item-name {
+            flex: 1;
+            padding-right: 8px;
+        }
+
+        .group-item-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .group-item-btn {
+            background: transparent;
+            border: none;
+            padding: 4px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            line-height: 1;
+        }
+
+        .group-item-btn.edit { color: var(--edit-color); }
+        .group-item-btn.delete { color: var(--danger); }
+        .group-item-btn:active { background: rgba(255,255,255,0.07); }
+
+        .group-dropdown-footer {
+            border-top: 1px solid var(--border-color);
+            padding: 8px 10px;
+            flex-shrink: 0;
+        }
+
+        .group-create-btn {
+            background: transparent;
+            border: none;
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 0;
+            width: 100%;
+            text-align: left;
+        }
+
+        .group-create-btn:active { opacity: 0.7; }
+
+        .group-empty-msg {
+            padding: 12px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        /* Мини-модалка для создания/переименования группы */
+        .mini-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(3px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .mini-modal {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 18px;
+            width: 100%;
+            max-width: 340px;
+            box-shadow: 0 16px 30px rgba(0,0,0,0.5);
+        }
+
+        .mini-modal h4 {
+            font-size: 1rem;
+            margin-bottom: 12px;
+            color: var(--text-main);
+        }
+
+        .mini-modal-btns {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        /* Фильтр по группам */
+        .group-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 8px 0 2px;
+        }
+
+        .group-chip {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .group-chip:active {
+            opacity: 0.8;
+        }
+
+        .group-chip.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .group-chip.chip-reset {
+            border-style: dashed;
+        }
+
+        .group-chip.chip-ungrouped {
+            border-style: dotted;
+        }
+
+        .offset-sign-btn {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            height: 42px;
+            min-width: 42px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .offset-sign-btn.negative {
+            background: rgba(239,68,68,0.1);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .offset-sign-btn.positive {
+            background: rgba(16,185,129,0.1);
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+        .footer-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 6px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            z-index: 9999;
+            min-height: 32px;
+        }
+        .save-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .save-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            transition: background 0.3s;
+        }
+        .save-dot.dirty {
+            background: #f59e0b;
+        }
+        .save-dot.error {
+            background: var(--danger);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-top">
+            <h1>Бортовой Журнал</h1>
+            <div class="date-picker-container">
+                <button class="date-nav-btn" onclick="changeDate(-1)">&lt;</button>
+                <input type="date" id="global-date">
+                <button class="date-nav-btn" onclick="changeDate(1)">&gt;</button>
+            </div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('logs-view')">Замеры</button>
+            <button class="tab-btn" onclick="switchTab('settings-view')">База приборов</button>
+        </div>
+        <div id="group-filter-bar" class="group-filter-bar" style="display:none;"></div>
+    </header>
+
+    <div class="container">
+        
+        <!-- ЭКРАН ЗАМЕРОВ -->
+        <div id="logs-view" class="view-section active">
+            <div id="logs-container"></div>
+        </div>
+
+        <!-- ЭКРАН НАСТРОЕК (БАЗА ПРИБОРОВ) -->
+        <div id="settings-view" class="view-section">
+            <div class="log-card">
+                <h3 style="margin-bottom:12px; font-size:1rem;">Добавить объект контроля</h3>
+                <div class="form-group">
+                    <label>Название (напр., Танкер №1 или ГД Счётчик)</label>
+                    <input type="text" id="item-name" placeholder="Введите название...">
+                </div>
+                <div class="form-group">
+                    <label>Время обязательных замеров:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label"><input type="checkbox" id="chk-8" checked> 08:00</label>
+                        <label class="checkbox-label"><input type="checkbox" id="chk-12"> 12:00</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <label class="checkbox-label"><input type="checkbox" id="chk-predict" checked> Включить предсказание тренда</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Поправка (offset) — применяется к каждому замеру при отображении</label>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button type="button" class="offset-sign-btn positive" id="item-offset-sign"
+                            onclick="toggleOffsetSign('item-offset-sign')">+</button>
+                        <input type="number" id="item-offset" step="any" placeholder="0 (по умолчанию)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Группа</label>
+                    <div class="group-dropdown-wrapper" id="add-group-wrapper">
+                        <div class="group-select-field" onclick="toggleGroupDropdown('add-group-wrapper', null)">
+                            <span id="add-group-label">Без группы</span>
+                            <span class="group-select-arrow">▼</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="item-groupId" value="">
+                </div>
+                <button class="btn" onclick="addItem()">Добавить в список</button>
+            </div>
+
+            <!-- АККОРДЕОН ТЕКУЩЕЙ БАЗЫ ДАННЫХ -->
+            <div class="accordion-wrapper">
+                <div class="accordion-header" onclick="toggleDbAccordion()">
+                    <span id="accordion-title">Текущий список БД (пусто)</span>
+                    <span id="accordion-arrow">▼</span>
+                </div>
+                <div id="items-container" class="accordion-content"></div>
+            </div>
+
+            <!-- БЭКАП НА ФАЙЛ -->
+            <div class="backup-zone">
+                <h3 style="font-size:0.95rem; color:var(--text-muted);">Резервное копирование в файл памяти</h3>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Регулярно экспортируйте данные, чтобы не потерять их при очистке кэша браузера.</p>
+                <div class="backup-btns">
+                    <button class="btn btn-secondary" onclick="exportDataToFile()">Экспорт в файл</button>
+                    <label class="file-input-label">
+                        Импорт из файла
+                        <input type="file" id="file-import" onchange="importDataFromFile(event)">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ (СПРЯТАНО ПО УМОЛЧАНИЮ) -->
+    <div id="edit-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content log-card">
+            <div class="modal-title">Редактирование объекта</div>
+            <input type="hidden" id="edit-item-id">
+            
+            <div class="form-group">
+                <label>Название объекта контроля</label>
+                <input type="text" id="edit-item-name">
+            </div>
+            
+            <div class="form-group">
+                <label>Время обязательных замеров:</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label"><input type="checkbox" id="edit-chk-8"> 08:00</label>
+                    <label class="checkbox-label"><input type="checkbox" id="edit-chk-12"> 12:00</label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <label class="checkbox-label"><input type="checkbox" id="edit-chk-predict"> Включить предсказание тренда</label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Поправка (offset) — применяется к каждому замеру при отображении</label>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button type="button" class="offset-sign-btn positive" id="edit-offset-sign"
+                        onclick="toggleOffsetSign('edit-offset-sign')">+</button>
+                    <input type="number" id="edit-item-offset" step="any" placeholder="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Группа</label>
+                <div class="group-dropdown-wrapper" id="edit-group-wrapper">
+                    <div class="group-select-field" onclick="toggleGroupDropdown('edit-group-wrapper', null)">
+                        <span id="edit-group-label">Без группы</span>
+                        <span class="group-select-arrow">▼</span>
+                    </div>
+                </div>
+                <input type="hidden" id="edit-item-groupId" value="">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn" onclick="saveEditedItem()">Сохранить изменения</button>
+                <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ЭС МОДАЛКА -->
+    <div id="es-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content log-card" style="max-height:80vh; overflow-y:auto;">
+            <div class="modal-title" id="es-modal-title">Экстренные замеры</div>
+            <div id="es-entries-container"></div>
+            <button class="btn btn-secondary" style="margin-top:10px;" onclick="addEmergencyEntry()">+ Добавить запись</button>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeEsModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МИНИ-МОДАЛКА ГРУППЫ -->
+    <div id="group-mini-modal" class="mini-modal-overlay" style="display:none;" onclick="if(event.target===this)closeGroupModal();">
+        <div class="mini-modal">
+            <h4 id="group-mini-modal-title">Создать группу</h4>
+            <input type="text" id="group-mini-modal-input" placeholder="Название группы...">
+            <div class="mini-modal-btns">
+                <button class="btn" onclick="confirmGroupModal()">Сохранить</button>
+                <button class="btn btn-secondary" onclick="closeGroupModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-bar">
+        <div class="save-indicator">
+            <div class="save-dot" id="save-dot"></div>
+            <span id="save-label">Сохранение...</span>
+        </div>
+        <span id="idb-label">Бэкап: —</span>
+    </div>
+
+    <script>
+        // Инициализация структуры базы данных
+        let state = {
+            items: [],
+            logs: {},
+            groups: [],
+            filterGroupIds: []
+        };
+
+        // --- IndexedDB ---
+        const IDB_NAME = 'ship_logger_db';
+        const IDB_STORE = 'backups';
+        const IDB_KEY = 'main';
+        let idb = null;
+
+        function openIDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(IDB_NAME, 1);
+                req.onupgradeneeded = e => {
+                    e.target.result.createObjectStore(IDB_STORE);
+                };
+                req.onsuccess = e => { idb = e.target.result; resolve(idb); };
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function saveToIDB(data) {
+            if (!idb) return Promise.reject('IDB not ready');
+            return new Promise((resolve, reject) => {
+                const tx = idb.transaction(IDB_STORE, 'readwrite');
+                const store = tx.objectStore(IDB_STORE);
+                const payload = { data, ts: Date.now() };
+                const req = store.put(payload, IDB_KEY);
+                req.onsuccess = () => resolve(payload.ts);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function loadFromIDB() {
+            if (!idb) return Promise.reject('IDB not ready');
+            return new Promise((resolve, reject) => {
+                const tx = idb.transaction(IDB_STORE, 'readonly');
+                const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function formatTime(ts) {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            const hh = String(d.getHours()).padStart(2,'0');
+            const mm = String(d.getMinutes()).padStart(2,'0');
+            const ss = String(d.getSeconds()).padStart(2,'0');
+            return `${hh}:${mm}:${ss}`;
+        }
+
+        // Дебounce для IDB — не чаще раза в 3 сек
+        let idbTimer = null;
+        function scheduleIDBBackup() {
+            clearTimeout(idbTimer);
+            idbTimer = setTimeout(async () => {
+                try {
+                    const ts = await saveToIDB(state);
+                    document.getElementById('idb-label').textContent = `Бэкап: ${formatTime(ts)}`;
+                } catch(e) {
+                    document.getElementById('idb-label').textContent = 'Бэкап: ошибка';
+                    console.error('IDB backup error:', e);
+                }
+            }, 3000);
+        }
+
+        // Флаг состояния аккордеона БД (по умолчанию скрыт)
+        let isAccordionOpen = false;
+        let esModalItemId = null;
+
+        // Глобальные переменные для улучшенного drag-and-drop
+        let dragState = {
+            element: null,
+            clone: null,
+            placeholder: null,
+            startY: 0,
+            offsetY: 0,
+            initialIndex: -1,
+            scrollTimer: null,
+            lastTarget: null,
+        };
+
+        function onDragStart(e) {
+            const handle = e.currentTarget;
+            const card = handle.closest('.log-card');
+            if (!card) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            
+            const rect = card.getBoundingClientRect();
+            const container = document.getElementById('logs-container');
+            
+            // Создаём клон, который будет летать
+            const clone = card.cloneNode(true);
+            clone.classList.add('dragging');
+            clone.style.position = 'fixed';
+            clone.style.left = rect.left + 'px';
+            clone.style.top = rect.top + 'px';
+            clone.style.width = rect.width + 'px';
+            clone.style.margin = '0';
+            clone.style.zIndex = '1000';
+            clone.style.pointerEvents = 'none';
+            document.body.appendChild(clone);
+            
+            // Создаём заполнитель на месте оригинала
+            const placeholder = document.createElement('div');
+            placeholder.className = 'drag-placeholder';
+            placeholder.style.height = rect.height + 'px';
+            placeholder.style.width = rect.width + 'px';
+            card.parentNode.insertBefore(placeholder, card.nextSibling);
+            
+            // Прячем оригинал
+            card.style.display = 'none';
+            
+            // Сохраняем состояние
+            dragState.element = card;
+            dragState.clone = clone;
+            dragState.placeholder = placeholder;
+            dragState.startY = e.clientY;
+            dragState.offsetY = e.clientY - rect.top;
+            dragState.initialIndex = Array.from(container.children).indexOf(placeholder);
+            
+            document.addEventListener('pointermove', onDragMove);
+            document.addEventListener('pointerup', onDragEnd);
+            document.addEventListener('pointercancel', onDragEnd);
+        }
+
+        function onDragMove(e) {
+            if (!dragState.clone) return;
+            e.preventDefault();
+            
+            // Перемещаем клон за курсором
+            const newTop = e.clientY - dragState.offsetY;
+            dragState.clone.style.top = newTop + 'px';
+            
+            // Автоскролл
+            clearInterval(dragState.scrollTimer);
+            const scrollThreshold = 120;
+            const zone = window.innerHeight - scrollThreshold;
+            if (e.clientY < scrollThreshold) {
+                const intensity = Math.round((1 - e.clientY / scrollThreshold) * 8);
+                dragState.scrollTimer = setInterval(() => window.scrollBy(0, -intensity), 20);
+            } else if (e.clientY > zone) {
+                const intensity = Math.round(((e.clientY - zone) / scrollThreshold) * 8);
+                dragState.scrollTimer = setInterval(() => window.scrollBy(0, intensity), 20);
+            }
+            
+            // Определяем, над каким элементом находимся, и двигаем заполнитель
+            const container = document.getElementById('logs-container');
+            const cloneRect = dragState.clone.getBoundingClientRect();
+            const target = getDragTarget(container, cloneRect);
+            const placeholder = dragState.placeholder;
+
+            if (target && target !== placeholder) {
+                const targetRect = target.getBoundingClientRect();
+                const placeholderRect = placeholder.getBoundingClientRect();
+                const movingUp = targetRect.top < placeholderRect.top;
+
+                if (movingUp) {
+                    container.insertBefore(placeholder, target);
+                } else {
+                    container.insertBefore(placeholder, target.nextSibling);
+                }
+            }
+        }
+
+        function onDragEnd(e) {
+            document.removeEventListener('pointermove', onDragMove);
+            document.removeEventListener('pointerup', onDragEnd);
+            document.removeEventListener('pointercancel', onDragEnd);
+            clearInterval(dragState.scrollTimer);
+            
+            if (!dragState.clone) return;
+            
+            const card = dragState.element;
+            const placeholder = dragState.placeholder;
+            const clone = dragState.clone;
+            const container = document.getElementById('logs-container');
+            
+            // Восстанавливаем оригинальную карточку на место заполнителя
+            if (placeholder && placeholder.parentNode) {
+                placeholder.parentNode.insertBefore(card, placeholder);
+            } else {
+                container.appendChild(card);
+            }
+            
+            // Удаляем все возможные заполнители (защита от багов)
+            container.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
+            
+            card.style.display = '';
+            
+            // Удаляем клон
+            if (clone) clone.remove();
+            
+            // Фиксируем новый порядок — перестраиваем state.items,
+            // сохраняя позиции НЕвидимых элементов, но упорядочивая видимые
+            const visibleIds = [];
+            container.querySelectorAll('.log-card').forEach(c => {
+                const id = c.id.replace('card-', '');
+                if (id) visibleIds.push(id);
+            });
+
+            const visibleSet = new Set(visibleIds);
+            const reorderedVisible = visibleIds.map(id => state.items.find(i => i.id === id)).filter(Boolean);
+            // Вставляем видимые на их оригинальные позиции, не трогая невидимые
+            const newItems = [...state.items];
+            const visibleOriginalIndices = state.items
+                .map((item, idx) => visibleSet.has(item.id) ? idx : -1)
+                .filter(idx => idx !== -1);
+            reorderedVisible.forEach((item, i) => {
+                newItems[visibleOriginalIndices[i]] = item;
+            });
+            state.items = newItems;
+
+            saveState();
+            renderFilterBar();
+            renderLogs();
+            
+            // Сброс
+            dragState.element = null;
+            dragState.clone = null;
+            dragState.placeholder = null;
+            dragState.initialIndex = -1;
+            dragState.lastTarget = null;
+        }
+
+        function getDragTarget(container, cloneRect) {
+            const cards = [...container.querySelectorAll('.log-card')].filter(el => el !== dragState.element);
+            for (const card of cards) {
+                const cardRect = card.getBoundingClientRect();
+                const overlapTop = Math.max(cloneRect.top, cardRect.top);
+                const overlapBottom = Math.min(cloneRect.bottom, cardRect.bottom);
+                const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+                const overlapRatio = overlapHeight / cardRect.height;
+
+                // Если это уже текущая цель — держим её до 35% (мёртвая зона снизу)
+                if (card === dragState.lastTarget) {
+                    if (overlapRatio >= 0.35) return card;
+                } else {
+                    // Новая цель — только при 50% перекрытия
+                    if (overlapRatio >= 0.50) return card;
+                }
+            }
+            return null;
+        }
+
+        // --- УПРАВЛЕНИЕ ГРУППАМИ ---
+
+        // Контекст открытого дропдауна
+        let activeDropdownWrapperId = null;
+
+        function toggleGroupDropdown(wrapperId, currentGroupId) {
+            // Закрыть если уже открыт тот же
+            const existing = document.querySelector('.group-dropdown');
+            if (existing) {
+                existing.remove();
+                if (activeDropdownWrapperId === wrapperId) {
+                    activeDropdownWrapperId = null;
+                    return;
+                }
+            }
+            activeDropdownWrapperId = wrapperId;
+            renderGroupDropdown(wrapperId, currentGroupId);
+        }
+
+        function renderGroupDropdown(wrapperId, currentGroupId) {
+            const wrapper = document.getElementById(wrapperId);
+            if (!wrapper) return;
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'group-dropdown';
+
+            const list = document.createElement('div');
+            list.className = 'group-dropdown-list';
+
+            // Пункт "Без группы"
+            const noneItem = document.createElement('div');
+            noneItem.className = 'group-dropdown-item' + (!currentGroupId ? ' selected' : '');
+            noneItem.innerHTML = `<span class="group-item-name">Без группы</span>`;
+            noneItem.onclick = () => selectGroup(wrapperId, '', 'Без группы');
+            list.appendChild(noneItem);
+
+            if (state.groups.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'group-empty-msg';
+                empty.textContent = 'Групп пока нет';
+                list.appendChild(empty);
+            } else {
+                state.groups.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = 'group-dropdown-item' + (g.id === currentGroupId ? ' selected' : '');
+                    item.innerHTML = `
+                        <span class="group-item-name">${g.name}</span>
+                        <div class="group-item-actions">
+                            <button class="group-item-btn edit" title="Переименовать">✎</button>
+                            <button class="group-item-btn delete" title="Удалить">✖</button>
+                        </div>
+                    `;
+                    item.querySelector('.group-item-name').onclick = () => selectGroup(wrapperId, g.id, g.name);
+                    item.querySelector('.group-item-btn.edit').onclick = (e) => {
+                        e.stopPropagation();
+                        openGroupModal('rename', g.id, g.name, wrapperId, currentGroupId);
+                    };
+                    item.querySelector('.group-item-btn.delete').onclick = (e) => {
+                        e.stopPropagation();
+                        deleteGroup(g.id, wrapperId);
+                    };
+                    list.appendChild(item);
+                });
+            }
+
+            const footer = document.createElement('div');
+            footer.className = 'group-dropdown-footer';
+            footer.innerHTML = `<button class="group-create-btn">+ Создать группу</button>`;
+            footer.querySelector('button').onclick = () => openGroupModal('create', null, '', wrapperId, currentGroupId);
+
+            dropdown.appendChild(list);
+            dropdown.appendChild(footer);
+            wrapper.appendChild(dropdown);
+
+            // Закрыть при клике вне
+            setTimeout(() => {
+                document.addEventListener('pointerdown', closeDropdownOutside, { once: true });
+            }, 0);
+        }
+
+        function closeDropdownOutside(e) {
+            const dropdown = document.querySelector('.group-dropdown');
+            if (!dropdown) return;
+            if (!dropdown.contains(e.target)) {
+                dropdown.remove();
+                activeDropdownWrapperId = null;
+            } else {
+                // Кликнули внутри — переподпишемся
+                setTimeout(() => {
+                    document.addEventListener('pointerdown', closeDropdownOutside, { once: true });
+                }, 0);
+            }
+        }
+
+        function selectGroup(wrapperId, groupId, groupName) {
+            // Записываем в hidden input
+            const isAdd = wrapperId === 'add-group-wrapper';
+            const hiddenId = isAdd ? 'item-groupId' : 'edit-item-groupId';
+            const labelId = isAdd ? 'add-group-label' : 'edit-group-label';
+
+            document.getElementById(hiddenId).value = groupId;
+            document.getElementById(labelId).textContent = groupName || 'Без группы';
+
+            // Закрыть дропдаун
+            const dropdown = document.querySelector('.group-dropdown');
+            if (dropdown) dropdown.remove();
+            activeDropdownWrapperId = null;
+        }
+
+        // Контекст мини-модалки
+        let groupModalContext = { mode: null, groupId: null, wrapperId: null, currentGroupId: null };
+
+        function openGroupModal(mode, groupId, currentName, wrapperId, currentGroupId) {
+            groupModalContext = { mode, groupId, wrapperId, currentGroupId };
+            const modal = document.getElementById('group-mini-modal');
+            const title = document.getElementById('group-mini-modal-title');
+            const input = document.getElementById('group-mini-modal-input');
+
+            title.textContent = mode === 'create' ? 'Создать группу' : 'Переименовать группу';
+            input.value = currentName || '';
+            modal.style.display = 'flex';
+
+            // Закрыть дропдаун пока открыта модалка
+            const dropdown = document.querySelector('.group-dropdown');
+            if (dropdown) dropdown.remove();
+
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function closeGroupModal() {
+            document.getElementById('group-mini-modal').style.display = 'none';
+            document.getElementById('group-mini-modal-input').value = '';
+        }
+
+        function trapFocus(modalId) {
+            const modal = document.getElementById(modalId);
+            const focusable = modal.querySelectorAll('input, button, select, textarea, [tabindex]:not([tabindex="-1"])');
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            modal.addEventListener('keydown', function handler(e) {
+                if (e.key !== 'Tab') return;
+                if (modal.style.display === 'none') {
+                    modal.removeEventListener('keydown', handler);
+                    return;
+                }
+                if (e.shiftKey) {
+                    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+                } else {
+                    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+                }
+            });
+        }
+
+        function confirmGroupModal() {
+            const name = document.getElementById('group-mini-modal-input').value.trim();
+            if (!name) return alert('Введите название группы');
+
+            const { mode, groupId, wrapperId, currentGroupId } = groupModalContext;
+
+            if (mode === 'create') {
+                const newGroup = { id: 'group_' + Date.now(), name };
+                state.groups.push(newGroup);
+                saveState();
+                closeGroupModal();
+                // Переоткрыть дропдаун с новой группой уже выбранной
+                renderGroupDropdown(wrapperId, currentGroupId);
+
+            } else if (mode === 'rename') {
+                const g = state.groups.find(g => g.id === groupId);
+                if (g) {
+                    g.name = name;
+                    saveState();
+                    renderItems();
+                    // Обновить лейбл в поле если эта группа была выбрана
+                    const isAdd = wrapperId === 'add-group-wrapper';
+                    const hiddenId = isAdd ? 'item-groupId' : 'edit-item-groupId';
+                    const labelId = isAdd ? 'add-group-label' : 'edit-group-label';
+                    if (document.getElementById(hiddenId).value === groupId) {
+                        document.getElementById(labelId).textContent = name;
+                    }
+                }
+                closeGroupModal();
+                renderGroupDropdown(wrapperId, currentGroupId);
+            }
+        }
+
+        function deleteGroup(groupId, wrapperId) {
+            if (!confirm('Удалить группу? Все приборы в ней останутся в базе, но потеряют группу.')) return;
+
+            state.groups = state.groups.filter(g => g.id !== groupId);
+            state.items.forEach(item => {
+                if (item.groupId === groupId) item.groupId = null;
+            });
+            state.filterGroupIds = state.filterGroupIds.filter(id => id !== groupId);
+            saveState();
+            renderItems();
+            renderFilterBar();
+
+            // Сбросить поле если удалённая группа была выбрана
+            ['add-group-wrapper', 'edit-group-wrapper'].forEach(wId => {
+                const isAdd = wId === 'add-group-wrapper';
+                const hiddenId = isAdd ? 'item-groupId' : 'edit-item-groupId';
+                const labelId = isAdd ? 'add-group-label' : 'edit-group-label';
+                const el = document.getElementById(hiddenId);
+                if (el && el.value === groupId) {
+                    el.value = '';
+                    document.getElementById(labelId).textContent = 'Без группы';
+                }
+            });
+
+            // Переоткрыть дропдаун
+            const currentGroupId = document.getElementById(
+                wrapperId === 'add-group-wrapper' ? 'item-groupId' : 'edit-item-groupId'
+            ).value;
+            renderGroupDropdown(wrapperId, currentGroupId);
+            }
+
+            // --- ФИЛЬТР ПО ГРУППАМ ---
+
+        function renderFilterBar() {
+            const bar = document.getElementById('group-filter-bar');
+            if (!bar) return;
+
+            const isLogsTab = document.getElementById('logs-view').classList.contains('active');
+
+            // Показываем только если есть группы И мы на вкладке замеров
+            if (state.groups.length === 0 || !isLogsTab) {
+                bar.style.display = 'none';
+                return;
+            }
+            bar.style.display = 'flex';
+            bar.innerHTML = '';
+
+            // Чипс "Все"
+            const allChip = document.createElement('div');
+            allChip.className = 'group-chip chip-reset' + (state.filterGroupIds.length === 0 ? ' active' : '');
+            allChip.textContent = 'Все';
+            allChip.onclick = () => {
+                state.filterGroupIds = [];
+                saveState();
+                renderFilterBar();
+                renderLogs();
+            };
+            bar.appendChild(allChip);
+
+            // Чипсы групп
+            state.groups.forEach(g => {
+                const chip = document.createElement('div');
+                const isActive = state.filterGroupIds.includes(g.id);
+                chip.className = 'group-chip' + (isActive ? ' active' : '');
+                chip.textContent = g.name;
+                chip.onclick = () => toggleFilterGroup(g.id);
+                bar.appendChild(chip);
+            });
+
+            // Чипс "Без группы" — если есть хоть один прибор без группы
+            const hasUngrouped = state.items.some(i => !i.groupId);
+            if (hasUngrouped) {
+                const ungroupedChip = document.createElement('div');
+                const isActive = state.filterGroupIds.includes('ungrouped');
+                ungroupedChip.className = 'group-chip chip-ungrouped' + (isActive ? ' active' : '');
+                ungroupedChip.textContent = 'Без группы';
+                ungroupedChip.onclick = () => toggleFilterGroup('ungrouped');
+                bar.appendChild(ungroupedChip);
+            }
+            }
+
+            function toggleFilterGroup(groupId) {
+            const idx = state.filterGroupIds.indexOf(groupId);
+            if (idx === -1) {
+                state.filterGroupIds.push(groupId);
+            } else {
+                state.filterGroupIds.splice(idx, 1);
+            }
+            saveState();
+            renderFilterBar();
+            renderLogs();
+            }
+
+            function changeDate(days) {
+            const input = document.getElementById('global-date');
+            if (!input.value) return;
+            
+            const current = new Date(input.value + 'T00:00:00');
+            current.setDate(current.getDate() + days);
+            input.value = getLocalDateString(current);
+            renderLogs();
+        }
+
+        // --- ЭКСТРЕННЫЕ ЗАМЕРЫ (ЭС) ---
+
+        function getEmergencyReadings(date, itemId) {
+            if (!state.logs[date] || !state.logs[date][itemId]) return [];
+            const readings = Array.isArray(state.logs[date][itemId])
+                ? state.logs[date][itemId]
+                : getItemReadings(date, itemId);
+            return readings.filter(r => r.isEmergency);
+        }
+
+        function openEmergencyModal(itemId) {
+            esModalItemId = itemId;
+            const item = state.items.find(i => i.id === itemId);
+            document.getElementById('es-modal-title').textContent = `ЭС: ${item ? item.name : ''}`;
+            renderEsEntries();
+            document.getElementById('es-modal').style.display = 'flex';
+        }
+
+        function closeEsModal() {
+            document.getElementById('es-modal').style.display = 'none';
+            esModalItemId = null;
+            renderLogs();
+        }
+
+        function renderEsEntries() {
+            const container = document.getElementById('es-entries-container');
+            const date = document.getElementById('global-date').value;
+            const entries = getEmergencyReadings(date, esModalItemId);
+            container.innerHTML = '';
+
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="padding:16px 0;">Нет экстренных замеров за этот день.</div>';
+                return;
+            }
+
+            entries.forEach(entry => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+                card.innerHTML = `
+                    <input type="time" value="${entry.time}"
+                        style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-main);padding:8px;border-radius:6px;font-size:0.9rem;flex:1;height:42px;box-sizing:border-box;"
+                        onchange="updateEmergencyReading('${entry.esId}', 'time', this.value)">
+                    <input type="number" step="any" inputmode="decimal" value="${entry.value ?? ''}" placeholder="Значение"
+                        style="background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-main);padding:8px;border-radius:6px;font-size:0.9rem;flex:1;height:42px;box-sizing:border-box;"
+                        oninput="updateEmergencyReading('${entry.esId}', 'value', this.value)">
+                    <button onclick="deleteEmergencyReading('${entry.esId}')"
+                        style="background:transparent;border:none;color:var(--danger);font-size:1.1rem;cursor:pointer;padding:4px 8px;">✖</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function addEmergencyEntry() {
+            const date = document.getElementById('global-date').value;
+            const itemId = esModalItemId;
+            if (!state.logs[date]) state.logs[date] = {};
+            if (!state.logs[date][itemId]) state.logs[date][itemId] = [];
+            if (!Array.isArray(state.logs[date][itemId])) {
+                state.logs[date][itemId] = getItemReadings(date, itemId);
+            }
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const baseTime = `${h}:${m}`;
+            const existingAtTime = state.logs[date][itemId].filter(r => r.time === baseTime);
+            // Если уже есть запись с таким временем — сдвигаем на 1 минуту вперёд
+            let finalTime = baseTime;
+            if (existingAtTime.length > 0) {
+                const shifted = new Date(now.getTime() + 60000);
+                finalTime = String(shifted.getHours()).padStart(2,'0') + ':' + String(shifted.getMinutes()).padStart(2,'0');
+            }
+            const entry = {
+                time: finalTime,
+                value: null,
+                isOperation: false,
+                isEmergency: true,
+                esId: 'es_' + Date.now()
+            };
+            state.logs[date][itemId].push(entry);
+            state.logs[date][itemId].sort((a, b) => a.time.localeCompare(b.time));
+            saveState();
+            renderEsEntries();
+        }
+
+        function updateEmergencyReading(esId, field, val) {
+            const date = document.getElementById('global-date').value;
+            const readings = state.logs[date][esModalItemId];
+            if (!readings) return;
+            const entry = readings.find(r => r.esId === esId);
+            if (!entry) return;
+            if (field === 'time') {
+                entry.time = val;
+                readings.sort((a, b) => a.time.localeCompare(b.time));
+            } else {
+                entry.value = val === '' ? null : Number(val);
+            }
+            saveState();
+        }
+
+        function deleteEmergencyReading(esId) {
+            const date = document.getElementById('global-date').value;
+            state.logs[date][esModalItemId] = state.logs[date][esModalItemId].filter(r => r.esId !== esId);
+            saveState();
+            renderEsEntries();
+        }
+
+        function handleInputNext(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const inputs = Array.from(document.querySelectorAll('#logs-container input[type="number"]'));
+                const index = inputs.indexOf(e.target);
+                if (index !== -1 && index < inputs.length - 1) {
+                    inputs[index + 1].focus();
+                }
+            }
+        }
+
+        function getLocalDateString(date = new Date()) {
+            const offset = date.getTimezoneOffset();
+            const local = new Date(date.getTime() - offset * 60000);
+            return local.toISOString().slice(0, 10);
+        }
+
+        async function init() {
+            await openIDB();
+
+            // Пробуем загрузить из IDB (свежее), fallback на localStorage
+            const idbRecord = await loadFromIDB().catch(() => null);
+            const lsRaw = localStorage.getItem('ship_logger_state');
+            const lsTs = localStorage.getItem('ship_logger_state_ts');
+
+            let loaded = false;
+            if (idbRecord && idbRecord.data) {
+                // Берём IDB если он новее или localStorage пуст
+                const idbNewer = !lsTs || idbRecord.ts >= Number(lsTs);
+                if (idbNewer) {
+                    state = idbRecord.data;
+                    loaded = true;
+                    document.getElementById('idb-label').textContent = `Бэкап: ${formatTime(idbRecord.ts)}`;
+                }
+            }
+            if (!loaded && lsRaw) {
+                try {
+                    state = JSON.parse(lsRaw);
+                } catch(e) { console.error(e); }
+            }
+            if (!state.groups) state.groups = [];
+            if (!state.filterGroupIds) state.filterGroupIds = [];
+
+            const today = getLocalDateString();
+
+            document.getElementById('global-date').value = today;
+            document.getElementById('global-date').addEventListener('change', renderLogs);
+
+            renderItems();
+            renderFilterBar();
+            renderLogs();
+
+            // Отслеживаем несохранённые изменения
+            let unsavedChanges = false;
+
+            const originalSaveState = saveState;
+            window.saveState = function() {
+                originalSaveState();
+                unsavedChanges = false;
+            };
+
+            // Помечаем изменения при вводе в любой инпут журнала
+            document.addEventListener('input', (e) => {
+                if (e.target.closest('#logs-container')) {
+                    unsavedChanges = true;
+                    const dot = document.getElementById('save-dot');
+                    const label = document.getElementById('save-label');
+                    if (dot) dot.classList.add('dirty');
+                    if (label) label.textContent = 'Не сохранено...';
+                }
+            });
+
+            window.addEventListener('beforeunload', (e) => {
+                if (unsavedChanges) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+
+            trapFocus('edit-modal');
+            trapFocus('es-modal');
+            trapFocus('group-mini-modal');
+        }
+
+        function saveState() {
+            localStorage.setItem('ship_logger_state', JSON.stringify(state));
+            localStorage.setItem('ship_logger_state_ts', Date.now().toString());
+
+            // Индикатор сохранения
+            const dot = document.getElementById('save-dot');
+            const label = document.getElementById('save-label');
+            if (dot && label) {
+                dot.classList.remove('dirty', 'error');
+                label.textContent = `Сохранено в ${formatTime(Date.now())}`;
+            }
+
+            // Асинхронный бэкап в IDB
+            scheduleIDBBackup();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            renderFilterBar();
+            if(tabId === 'logs-view') {
+                renderLogs();
+            }
+        }
+
+        // --- УПРАВЛЕНИЕ АККОРДЕОНОМ БД ---
+        function toggleDbAccordion() {
+            isAccordionOpen = !isAccordionOpen;
+            const content = document.getElementById('items-container');
+            const arrow = document.getElementById('accordion-arrow');
+            
+            if (isAccordionOpen) {
+                content.classList.add('open');
+                arrow.textContent = '▲';
+            } else {
+                content.classList.remove('open');
+                arrow.textContent = '▼';
+            }
+        }
+
+        // --- УПРАВЛЕНИЕ БАЗОЙ ПРИБОРОВ ---
+        function toggleOffsetSign(btnId) {
+            const btn = document.getElementById(btnId);
+            if (btn.textContent === '+') {
+                btn.textContent = '−';
+                btn.classList.replace('positive', 'negative');
+            } else {
+                btn.textContent = '+';
+                btn.classList.replace('negative', 'positive');
+            }
+        }
+
+        function getOffsetValue(inputId, signBtnId) {
+            const raw = parseFloat(document.getElementById(inputId).value);
+            if (isNaN(raw)) return 0;
+            const sign = document.getElementById(signBtnId).textContent === '+' ? 1 : -1;
+            return Math.abs(raw) * sign;
+        }
+
+        function addItem() {
+            const nameInput = document.getElementById('item-name');
+            const name = nameInput.value.trim();
+            if (!name) return alert('Введите название объекта');
+
+            const schedule = [];
+            if (document.getElementById('chk-8').checked) schedule.push('08:00');
+            if (document.getElementById('chk-12').checked) schedule.push('12:00');
+            
+            if (schedule.length === 0) return alert('Выберите хотя бы одно время для замеров');
+
+            const offsetVal = getOffsetValue('item-offset', 'item-offset-sign');
+            const groupId = document.getElementById('item-groupId').value || null;
+            const item = {
+                id: 'item_' + Date.now(),
+                name: name,
+                schedule: schedule,
+                predict: document.getElementById('chk-predict').checked,
+                offset: offsetVal,
+                groupId: groupId
+            };
+
+            state.items.push(item);
+            saveState();
+            renderItems();
+            
+            nameInput.value = '';
+            document.getElementById('item-offset').value = '';
+            nameInput.focus();
+        }
+
+        function deleteItem(id) {
+            if (confirm('Удалить объект контроля и все его исторические замеры?')) {
+                state.items = state.items.filter(i => i.id !== id);
+                Object.keys(state.logs).forEach(date => {
+                    if (state.logs[date][id]) delete state.logs[date][id];
+                });
+                saveState();
+                renderItems();
+            }
+        }
+
+        // --- ОКНО РЕДАКТИРОВАНИЯ (МОДАЛКА) ---
+        function openEditModal(id) {
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('edit-item-id').value = item.id;
+            document.getElementById('edit-item-name').value = item.name;
+            document.getElementById('edit-chk-8').checked = item.schedule.includes('08:00');
+            document.getElementById('edit-chk-12').checked = item.schedule.includes('12:00');
+            document.getElementById('edit-chk-predict').checked = item.predict;
+            
+            // Восстановить состояние тумблера знака
+            const signBtn = document.getElementById('edit-offset-sign');
+            if ((item.offset || 0) < 0) {
+                signBtn.textContent = '−';
+                signBtn.classList.replace('positive', 'negative');
+            } else {
+                signBtn.textContent = '+';
+                signBtn.classList.replace('negative', 'positive');
+            }
+            document.getElementById('edit-item-offset').value = Math.abs(item.offset || 0);
+
+            const editGroupId = item.groupId || '';
+            document.getElementById('edit-item-groupId').value = editGroupId;
+            const editGroup = state.groups.find(g => g.id === editGroupId);
+            document.getElementById('edit-group-label').textContent = editGroup ? editGroup.name : 'Без группы';
+
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+
+        function saveEditedItem() {
+            const id = document.getElementById('edit-item-id').value;
+            const name = document.getElementById('edit-item-name').value.trim();
+            if (!name) return alert('Название не может быть пустым');
+
+            const schedule = [];
+            if (document.getElementById('edit-chk-8').checked) schedule.push('08:00');
+            if (document.getElementById('edit-chk-12').checked) schedule.push('12:00');
+
+            if (schedule.length === 0) return alert('Выберите хотя бы одно время замеров');
+
+            const itemIndex = state.items.findIndex(i => i.id === id);
+            if (itemIndex !== -1) {
+                const editOffsetVal = getOffsetValue('edit-item-offset', 'edit-offset-sign');
+                state.items[itemIndex].name = name;
+                state.items[itemIndex].schedule = schedule;
+                state.items[itemIndex].predict = document.getElementById('edit-chk-predict').checked;
+                state.items[itemIndex].offset = editOffsetVal;
+                state.items[itemIndex].groupId = document.getElementById('edit-item-groupId').value || null;
+                
+                saveState();
+                renderItems();
+                closeEditModal();
+                alert('Объект успешно обновлен');
+            }
+        }
+
+        function renderItems() {
+            const container = document.getElementById('items-container');
+            const titleEl = document.getElementById('accordion-title');
+            container.innerHTML = '';
+            
+            const count = state.items.length;
+            if (count === 0) {
+                titleEl.textContent = 'Текущий список БД (пусто)';
+                container.innerHTML = '<div class="empty-state">База пуста. Добавьте танки или приборы выше.</div>';
+                return;
+            }
+
+            titleEl.textContent = `Текущий список БД (${count})`;
+
+            state.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `
+                    <div>
+                        <div style="font-weight:600; user-select:text;">${item.name}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">
+                            Время: ${item.schedule.join(', ')} | Тренды: ${item.predict ? 'Да' : 'Нет'}
+                            ${(() => {
+                                const g = state.groups.find(g => g.id === item.groupId);
+                                return g ? `| <span style="color:var(--accent)">${g.name}</span>` : '';
+                            })()}
+                        </div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn-action edit" onclick="openEditModal('${item.id}')" title="Редактировать">✎</button>
+                        <button class="btn-action delete" onclick="deleteItem('${item.id}')" title="Удалить">✖</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- РАБОТА С ЛОГАМИ И МАТЕМАТИКА ПРЕДСКАЗАНИЙ ---
+
+        function getItemReadings(date, itemId) {
+            if (!state.logs[date] || !state.logs[date][itemId]) return [];
+            const data = state.logs[date][itemId];
+            // Миграция старого формата {slot: entry} → массив
+            if (!Array.isArray(data)) {
+                return Object.entries(data).map(([time, entry]) => ({
+                    time,
+                    value: typeof entry === 'object' ? entry.value : entry,
+                    isOperation: typeof entry === 'object' ? (entry.isOperation || false) : false
+                })).sort((a, b) => a.time.localeCompare(b.time));
+            }
+            return data;
+        }
+
+        function getReadingByTime(date, itemId, time) {
+            return getItemReadings(date, itemId).find(r => r.time === time) || null;
+        }
+
+        function timeToMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function getTimeline(itemId) {
+            const allDates = Object.keys(state.logs).sort();
+            const timeline = [];
+            allDates.forEach(date => {
+                getItemReadings(date, itemId).forEach(r => {
+                    if (r.value !== null && r.value !== undefined && r.value !== '' && !isNaN(Number(r.value))) {
+                        const [year, month, day] = date.split('-').map(Number);
+                        const [hour, min] = r.time.split(':').map(Number);
+                        timeline.push({
+                            ts: new Date(year, month - 1, day, hour, min).getTime(),
+                            value: Number(r.value),
+                            isOperation: r.isOperation || false
+                        });
+                    }
+                });
+            });
+            return timeline.sort((a, b) => a.ts - b.ts);
+        }
+
+        function getNextScheduledTime(item, afterDate) {
+            const afterMinutes = afterDate.getHours() * 60 + afterDate.getMinutes();
+            const sortedSlots = [...item.schedule].sort();
+            for (const slot of sortedSlots) {
+                const slotMin = timeToMinutes(slot);
+                if (slotMin > afterMinutes) {
+                    return new Date(afterDate.getFullYear(), afterDate.getMonth(), afterDate.getDate(),
+                        Math.floor(slotMin / 60), slotMin % 60).getTime();
+                }
+            }
+            // Следующий день, первый слот
+            const firstMin = timeToMinutes(sortedSlots[0]);
+            const nextDay = new Date(afterDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            return new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(),
+                Math.floor(firstMin / 60), firstMin % 60).getTime();
+        }
+
+        function updateLogValue(itemId, time, val) {
+            const date = document.getElementById('global-date').value;
+            if (!state.logs[date]) state.logs[date] = {};
+            if (!state.logs[date][itemId]) state.logs[date][itemId] = [];
+
+            // Миграция: если вдруг старый объект
+            if (!Array.isArray(state.logs[date][itemId])) {
+                state.logs[date][itemId] = getItemReadings(date, itemId);
+            }
+
+            const readings = state.logs[date][itemId];
+            const idx = readings.findIndex(r => r.time === time);
+            const numVal = val === '' ? null : Number(val);
+
+            if (numVal === null) {
+                if (idx !== -1) readings.splice(idx, 1);
+            } else if (idx !== -1) {
+                readings[idx].value = numVal;
+            } else {
+                readings.push({ time, value: numVal, isOperation: false });
+                readings.sort((a, b) => a.time.localeCompare(b.time));
+            }
+
+            // Обновление corrected-val в реальном времени
+            const item = state.items.find(i => i.id === itemId);
+            const offset = item ? (item.offset || 0) : 0;
+            const correctedSpan = document.getElementById(`corrected-${itemId}-${time.replace(':', '-')}`);
+            if (correctedSpan) {
+                if (numVal !== null && offset !== 0) {
+                    const displayVal = (numVal + offset).toFixed(2).replace(/\.?0+$/, '');
+                    correctedSpan.textContent = displayVal;
+                    correctedSpan.style.display = 'flex';
+                } else {
+                    correctedSpan.style.display = 'none';
+                }
+            }
+
+            saveState();
+            updatePredictionUI(itemId);
+        }
+
+        function toggleOperation(itemId, time, isChecked) {
+            const date = document.getElementById('global-date').value;
+            const readings = getItemReadings(date, itemId);
+            const entry = readings.find(r => r.time === time);
+            if (!entry) return;
+            entry.isOperation = isChecked;
+            state.logs[date][itemId] = readings;
+            saveState();
+            renderLogs();
+        }
+
+        function calculatePrediction(itemId) {
+            const item = state.items.find(i => i.id === itemId);
+            if (!item) return { rate: '-', next: '-' };
+
+            const timeline = getTimeline(itemId);
+            if (timeline.length < 2) return { rate: '-', next: '-' };
+
+            let totalDelta = 0, totalHours = 0;
+
+            let lastNonOp = null;
+            for (let i = 0; i < timeline.length; i++) {
+                const curr = timeline[i];
+                if (curr.isOperation) {
+                    lastNonOp = null; // сброс — после операции цепочка прерывается
+                    continue;
+                }
+                if (lastNonOp !== null) {
+                    const hours = (curr.ts - lastNonOp.ts) / 3600000;
+                    if (hours > 0 && hours < 72) {
+                        totalDelta += curr.value - lastNonOp.value;
+                        totalHours += hours;
+                    }
+                }
+                lastNonOp = curr;
+            }
+
+            const offset = item.offset || 0;
+            const last = timeline[timeline.length - 1];
+
+            if (totalHours === 0) {
+                return { rate: '0 /ч', next: (last.value + offset).toFixed(2) };
+            }
+
+            const ratePerHour = totalDelta / totalHours;
+            const nextTs = getNextScheduledTime(item, new Date(last.ts));
+            const hoursUntilNext = (nextTs - last.ts) / 3600000;
+            const predictedDisplay = last.value + ratePerHour * hoursUntilNext + offset;
+
+            const rateStr = (ratePerHour >= 0 ? '+' : '') + ratePerHour.toFixed(3) + ' /ч';
+            return {
+                rate: rateStr,
+                next: predictedDisplay.toFixed(2).replace(/\.?0+$/, ''),
+                hoursUntilNext: hoursUntilNext.toFixed(1)
+            };
+        }
+
+        function updatePredictionUI(itemId) {
+            const card = document.getElementById(`card-${itemId}`);
+            if (!card) return;
+            const predZone = card.querySelector('.prediction-zone');
+            if (!predZone) return;
+
+            const item = state.items.find(i => i.id === itemId);
+            if (!item || !item.predict) return;
+
+            const data = calculatePrediction(itemId);
+            const isNeg = data.rate.startsWith('-');
+            predZone.innerHTML = `
+                <span>Темп: <b style="color:${isNeg ? '#ef4444' : '#10b981'}">${data.rate}</b></span>
+                <span>Ожидается (через ~${data.hoursUntilNext || '?'}ч): <span class="phantom-val">${data.next}</span></span>
+            `;
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '';
+            const currentDate = document.getElementById('global-date').value;
+
+            if (state.items.length === 0) {
+                container.innerHTML = '<div class="empty-state">Перейдите во вкладку "База приборов" и внесите танки/оборудование для отслеживания.</div>';
+                return;
+            }
+
+            const visibleItems = state.filterGroupIds.length === 0
+                ? state.items
+                : state.items.filter(item => {
+                    if (state.filterGroupIds.includes('ungrouped') && !item.groupId) return true;
+                    return item.groupId && state.filterGroupIds.includes(item.groupId);
+                });
+
+            if (visibleItems.length === 0 && state.items.length > 0) {
+                container.innerHTML = '<div class="empty-state">Нет приборов в выбранных группах.</div>';
+                return;
+            }
+
+            visibleItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'log-card';
+                card.id = `card-${item.id}`;
+
+                let headerMeta = item.schedule.length > 1 ? '2 раза в сутки' : '1 раз в сутки';
+                
+                const esCount = getEmergencyReadings(currentDate, item.id).length;
+                let inputsHtml = '';
+                item.schedule.forEach(slot => {
+                    const entry = getReadingByTime(currentDate, item.id, slot);
+                    const rawVal = entry ? entry.value : '';
+                    const isOpChecked = entry ? (entry.isOperation || false) : false;
+                    const offset = item.offset || 0;
+                    const displayVal = (rawVal !== '' && rawVal !== null && rawVal !== undefined)
+                        ? (Number(rawVal) + offset)
+                        : '';
+                    const offsetLabel = offset !== 0 ? ` <span style="color:var(--accent);font-size:0.7rem;">(+${offset} поправка)</span>` : '';
+
+                    inputsHtml += `
+                        <div class="input-group">
+                            <label>Замер на ${slot}${offsetLabel}</label>
+                            <div class="input-with-operation">
+                                <input type="number" step="any" inputmode="decimal" 
+                                       value="${rawVal}" 
+                                       placeholder="-" 
+                                       oninput="updateLogValue('${item.id}', '${slot}', this.value)"
+                                       onkeydown="handleInputNext(event)">
+                                <span class="corrected-val" id="corrected-${item.id}-${slot.replace(':', '-')}" style="display:${displayVal !== '' && offset !== 0 ? 'flex' : 'none'};">
+                                    ${displayVal}
+                                </span>
+                                <div class="side-actions">
+                                    <label class="operation-toggle ${isOpChecked ? 'active' : ''}" 
+                                           title="Отметить как операцию (заправка/слив)">
+                                        <input type="checkbox" 
+                                               ${isOpChecked ? 'checked' : ''} 
+                                               onchange="toggleOperation('${item.id}', '${slot}', this.checked)">
+                                        <span class="op-label">Опер.</span>
+                                    </label>
+                                    <button class="es-btn ${esCount > 0 ? 'has-entries' : ''}"
+                                            onclick="openEmergencyModal('${item.id}')"
+                                            title="Экстренный замер">ЭС${esCount > 0 ? ` (${esCount})` : ''}</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                let predictHtml = '';
+                if (item.predict) {
+                    const predData = calculatePrediction(item.id);
+                    const isNeg = predData.rate.startsWith('-');
+                    predictHtml = `
+                        <div class="prediction-zone">
+                            <span>Темп: <b style="color:${isNeg ? '#ef4444' : '#10b981'}">${predData.rate}</b></span>
+                            <span>Ожидается (через ~${predData.hoursUntilNext || '?'}ч): <span class="phantom-val">${predData.next}</span></span>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="drag-handle" title="Потяните для сортировки">☰</div>
+                            <div class="card-title">${item.name}</div>
+                        </div>
+                        <div class="card-meta">${headerMeta}</div>
+                    </div>
+                    <div class="card-inputs">
+                        ${inputsHtml}
+                    </div>
+                    ${predictHtml}
+                `;
+                
+                container.appendChild(card);
+                
+                // Навешиваем Drag & Drop события на рукоятку
+                const handle = card.querySelector('.drag-handle');
+                handle.addEventListener('pointerdown', onDragStart);
+            });
+        }
+
+        // --- СИСТЕМА ИМПОРТА/ЭКСПОРТА ---
+        function exportDataToFile() {
+            if(state.items.length === 0 && Object.keys(state.logs).length === 0) {
+                return alert('Нет данных для сохранения.');
+            }
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const d = new Date().toISOString().split('T')[0];
+            
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `ship_log_backup_${d}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importDataFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedState = JSON.parse(e.target.result);
+                    if (importedState.items && importedState.logs) {
+                        if(confirm('Импортированный файл полностью заменит вашу текущую базу и замеры! Продолжить?')) {
+                            state = importedState;
+                            saveState();
+                            renderItems();
+                            renderLogs();
+                            alert('Данные успешно импортированы!');
+                        }
+                    } else {
+                        alert('Ошибка: Файл имеет некорректную структуру.');
+                    }
+                } catch (err) {
+                    alert('Не удалось прочитать JSON-файл.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        window.onload = init;
+        if ("serviceWorker" in navigator) {
+            const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+            const manifestPath = basePath + '/manifest.json';
+            const manifestLink = document.querySelector('link[rel="manifest"]');
+            if (manifestLink) manifestLink.setAttribute('href', manifestPath);
+            navigator.serviceWorker.register(basePath + '/sw.js');
+        }
+    </script>
+</body>
+</html>
